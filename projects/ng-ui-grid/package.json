@@ -1,5 +1,5 @@
 {
-  "name": "@ruslankostiuk/ng-ui-grid",
+  "name": "@rkostiuk/ng-ui-grid",
   "version": "0.1.0",
   "description": "Reusable Angular grid with sorting, filtering, infinite scroll, menus, drag-drop columns, inline editing, and template renderers.",
   "author": "Ruslan Kostiuk <ruslankostiuk@gmail.com>",
