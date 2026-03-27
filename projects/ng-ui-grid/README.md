@@ -1,4 +1,4 @@
-# @ruslankostiuk/ng-ui-grid
+# @rkostiuk/ng-ui-grid
 
 Reusable Angular grid library with:
 
@@ -15,20 +15,20 @@ Reusable Angular grid library with:
 ## Install
 
 ```bash
-npm install @ruslankostiuk/ng-ui-grid
+npm install @rkostiuk/ng-ui-grid
 ```
 
 ## Import
 
 ```ts
-import { UiGridComponent, GridColumn } from '@ruslankostiuk/ng-ui-grid';
+import { UiGridComponent, GridColumn } from '@rkostiuk/ng-ui-grid';
 ```
 
 ## Basic usage
 
 ```ts
 import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { UiGridComponent, GridColumn } from '@ruslankostiuk/ng-ui-grid';
+import { UiGridComponent, GridColumn } from '@rkostiuk/ng-ui-grid';
 
 interface UserRow {
   id: number;

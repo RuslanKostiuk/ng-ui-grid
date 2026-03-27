@@ -2,7 +2,7 @@
 
 Angular grid workspace with:
 
-- publishable library package: [`@ruslankostiuk/ng-ui-grid`](https://www.npmjs.com/package/@ruslankostiuk/ng-ui-grid)
+- publishable library package: [`@rkostiuk/ng-ui-grid`](https://www.npmjs.com/package/@rkostiuk/ng-ui-grid)
 - local demo app for development and feature validation
 
 Repository: [github.com/RuslanKostiuk/ng-ui-grid](https://github.com/RuslanKostiuk/ng-ui-grid)
@@ -25,20 +25,20 @@ Demo app:
 ## Install
 
 ```bash
-npm install @ruslankostiuk/ng-ui-grid
+npm install @rkostiuk/ng-ui-grid
 ```
 
 ## Import
 
 ```ts
-import { UiGridComponent, GridColumn } from '@ruslankostiuk/ng-ui-grid';
+import { UiGridComponent, GridColumn } from '@rkostiuk/ng-ui-grid';
 ```
 
 ## Basic Usage
 
 ```ts
 import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { UiGridComponent, GridColumn } from '@ruslankostiuk/ng-ui-grid';
+import { UiGridComponent, GridColumn } from '@rkostiuk/ng-ui-grid';
 
 interface UserRow {
   id: number;
