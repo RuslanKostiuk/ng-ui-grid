@@ -1,0 +1,91 @@
+<main class="page">
+  <section class="hero">
+    <p class="eyebrow">Angular standalone grid</p>
+    <h1>Sortable headers, header filters, column menus, context menus, and infinite scroll.</h1>
+    <p class="hero-copy">
+      The same grid component runs in local mode and server mode. Local mode sorts and filters in-memory.
+      Server mode pushes sort, filter, and paging state into a callback that returns the next slice.
+    </p>
+  </section>
+
+  <section class="demo-grid">
+    <div class="section-head">
+      <div>
+        <h2>Local data with infinite scroll</h2>
+        <p>Client-side sorting and filtering over 600 generated rows.</p>
+      </div>
+    </div>
+
+    <app-ui-grid
+      [columns]="gridColumns()"
+      [rows]="gridLocalRows"
+      [pageSize]="35"
+      [themeVars]="demoThemeVars"
+      [mainMenuItems]="gridMainMenuItems"
+      [contextMenuItems]="gridContextMenuItems"
+      (sortChanged)="onSortChange('Local grid', $event)"
+      (filterChanged)="onFilterChange('Local grid', $event)"
+      (columnVisibilityChanged)="onColumnToggle('Local grid', $event.columnId, $event.visible)"
+      (cellEdited)="onCellEdit('Local grid', $event)">
+    </app-ui-grid>
+  </section>
+
+  <section class="demo-grid">
+    <div class="section-head">
+      <div>
+        <h2>Server-side paging and filtering</h2>
+        <p>Infinite scroll requests pages from a simulated backend using the current sort and filter state.</p>
+      </div>
+    </div>
+
+    <app-ui-grid
+      [columns]="gridColumns()"
+      [dataSource]="gridServerDataSource"
+      [pageSize]="40"
+      [themeVars]="demoThemeVars"
+      [mainMenuItems]="gridMainMenuItems"
+      [contextMenuItems]="gridContextMenuItems"
+      (sortChanged)="onSortChange('Server grid', $event)"
+      (filterChanged)="onFilterChange('Server grid', $event)"
+      (columnVisibilityChanged)="onColumnToggle('Server grid', $event.columnId, $event.visible)"
+      (cellEdited)="onCellEdit('Server grid', $event)">
+    </app-ui-grid>
+  </section>
+
+  <aside class="event-panel">
+    <div class="section-head">
+      <div>
+        <h2>Event feed</h2>
+        <p>Sort, filter, menu, and column visibility actions are logged here.</p>
+      </div>
+    </div>
+
+    <ul class="event-list">
+      @for (item of eventLog(); track item) {
+        <li>{{ item }}</li>
+      }
+    </ul>
+  </aside>
+</main>
+
+<ng-template #customerHeader let-column="column" let-sortIndicator="sortIndicator" let-toggleSort="toggleSort">
+  <button type="button" class="custom-header-button" (click)="toggleSort()">
+    <span class="custom-header-label">Profile</span>
+    <span>{{ column.header }}</span>
+    <span class="sort-indicator">{{ sortIndicator }}</span>
+  </button>
+</ng-template>
+
+<ng-template #segmentFilter let-value="value" let-setValue="setValue">
+  <select class="custom-filter-select" [ngModel]="value" (ngModelChange)="setValue($event)">
+    <option value="">All segments</option>
+    <option value="Enterprise">Enterprise</option>
+    <option value="SMB">SMB</option>
+    <option value="Startup">Startup</option>
+    <option value="Public">Public</option>
+  </select>
+</ng-template>
+
+<ng-template #countryCell let-value="value">
+  <span class="country-chip">{{ value }}</span>
+</ng-template>

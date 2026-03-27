@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.angular/
+.idea/
+out-tsc/
+coverage/
+.DS_Store

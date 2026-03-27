@@ -1,0 +1,181 @@
+<section class="grid-shell" [ngStyle]="themeVars()">
+  <header class="grid-toolbar">
+    <div class="grid-summary">
+      <strong>{{ displayedRows().length }}</strong>
+      @if (totalCount() !== undefined) {
+        <span>of {{ totalCount() }}</span>
+      } @else {
+        <span>rows loaded</span>
+      }
+    </div>
+
+    <div class="toolbar-actions">
+      <button type="button" class="menu-trigger" (click)="toggleMainMenu($event)">
+        Grid menu
+      </button>
+
+      @if (showMainMenu()) {
+        <div class="menu-panel" (click)="$event.stopPropagation()">
+          @for (item of resolvedMainMenuItems(); track item.id) {
+            <button
+              type="button"
+              class="menu-item"
+              [disabled]="!!item.disabled"
+              (click)="runMainMenuItem(item)">
+              {{ item.label }}
+            </button>
+          }
+
+          <div class="menu-divider"></div>
+          <div class="menu-title">Columns</div>
+
+          @for (column of internalColumns(); track column.id) {
+            <label class="column-toggle">
+              <input
+                type="checkbox"
+                [checked]="isColumnVisible(column)"
+                [disabled]="column.disableHide"
+                (change)="setColumnVisibility(column.id, $any($event.target).checked)">
+              <span>{{ column.header }}</span>
+            </label>
+          }
+        </div>
+      }
+    </div>
+  </header>
+
+  <div #gridFrame class="grid-frame">
+    <div #bodyScroller class="grid-viewport" (scroll)="onBodyScroll($event)">
+      <div class="grid-table">
+        <div class="grid-header">
+          @for (column of visibleColumns(); track column.id) {
+            <div
+              class="header-cell"
+              draggable="true"
+              [class.header-cell-dragging]="isDraggingColumn(column.id)"
+              [class.header-cell-drop-before]="showDropIndicator(column.id, 'before')"
+              [class.header-cell-drop-after]="showDropIndicator(column.id, 'after')"
+              [style.width]="column.width ?? null"
+              [style.flex]="column.width ? '0 0 auto' : '1 1 0'"
+              (dragstart)="onHeaderDragStart($event, column.id)"
+              (dragover)="onHeaderDragOver($event, column.id)"
+              (drop)="onHeaderDrop($event, column.id)"
+              (dragend)="onHeaderDragEnd($event, column.id)">
+              @if (column.headerTemplate) {
+                <ng-container
+                  [ngTemplateOutlet]="column.headerTemplate"
+                  [ngTemplateOutletContext]="headerTemplateContext(column)">
+                </ng-container>
+              } @else {
+                <div class="header-topline">
+                  <button
+                    type="button"
+                    class="header-button"
+                    [class.header-button-disabled]="!column.sortable"
+                    (click)="toggleSort(column)">
+                    <span>{{ column.header }}</span>
+                    <span class="sort-indicator">{{ sortIndicator(column) }}</span>
+                  </button>
+                </div>
+              }
+
+              <span class="drag-handle" title="Drag to reorder or drag out to hide">
+                ⋮⋮
+              </span>
+
+              @if (column.filterable) {
+                @if (column.filterTemplate) {
+                  <ng-container
+                    [ngTemplateOutlet]="column.filterTemplate"
+                    [ngTemplateOutletContext]="filterTemplateContext(column)">
+                  </ng-container>
+                } @else {
+                  <input
+                    type="text"
+                    class="filter-input"
+                    [ngModel]="filterValue(column.id)"
+                    [placeholder]="column.filterPlaceholder || 'Filter...'"
+                    (ngModelChange)="onFilterInput(column.id, $event)">
+                }
+              }
+            </div>
+          }
+        </div>
+
+        @for (row of displayedRows(); track defaultTrackBy($index, row)) {
+          <div
+            class="grid-row"
+            (contextmenu)="openContextMenu($event, row)">
+            @for (column of visibleColumns(); track column.id) {
+              <div
+                class="grid-cell"
+                [class.grid-cell-editable]="isEditable(column)"
+                [style.width]="column.width ?? null"
+                [style.flex]="column.width ? '0 0 auto' : '1 1 0'"
+                (dblclick)="startInlineEdit(row, column)">
+                @if (isEditingCell(row, column.id)) {
+                  <input
+                    type="{{ editorType(column) }}"
+                    class="cell-editor"
+                    [ngModel]="editDraftValue(row, column.id)"
+                    autofocus
+                    (ngModelChange)="updateEditDraft($event)"
+                    (blur)="commitInlineEdit(row, column)"
+                    (click)="$event.stopPropagation()"
+                    (keydown.enter)="commitInlineEdit(row, column)"
+                    (keydown.escape)="cancelInlineEdit()">
+                } @else {
+                  @if (column.cellTemplate) {
+                    <ng-container
+                      [ngTemplateOutlet]="column.cellTemplate"
+                      [ngTemplateOutletContext]="cellTemplateContext(row, column)">
+                    </ng-container>
+                  } @else {
+                    {{ renderCell(row, column) }}
+                  }
+                }
+              </div>
+            }
+          </div>
+        }
+
+        @if (loading()) {
+          <div class="grid-status">Loading rows…</div>
+        }
+        @if (!loading() && !displayedRows().length && !errorMessage()) {
+          <div class="grid-status">
+            {{ emptyMessage() }}
+          </div>
+        }
+        @if (!loading() && displayedRows().length && !hasMore()) {
+          <div class="grid-status">
+            End of rows
+          </div>
+        }
+        @if (errorMessage()) {
+          <div class="grid-status grid-error">
+            {{ errorMessage() }}
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+</section>
+
+@if (contextMenu(); as menu) {
+  <div
+    class="context-menu"
+    [style.left.px]="menu.x"
+    [style.top.px]="menu.y"
+    (click)="$event.stopPropagation()">
+    @for (item of menu.items; track item.id) {
+      <button
+        type="button"
+        class="menu-item"
+        [disabled]="!!item.disabled"
+        (click)="runContextMenuItem(item, menu.row)">
+        {{ item.label }}
+      </button>
+    }
+  </div>
+}
