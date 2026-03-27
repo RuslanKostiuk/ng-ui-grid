@@ -12,6 +12,7 @@ import {
   GridCellEdit,
   GridCellTemplateContext,
   GridColumn,
+  GridColumnResizeFinished,
   GridDataSource,
   GridFilterTemplateContext,
   GridFilters,
@@ -47,24 +48,63 @@ export class AppComponent {
   private readonly countryCellTemplate = viewChild<TemplateRef<unknown>>('countryCell');
 
   protected readonly customerColumns = computed<GridColumn<CustomerRow>[]>(() => [
-    { id: 'id', header: 'ID', field: 'id', width: '6rem', filterable: true, disableHide: true },
+    {
+      id: 'id',
+      header: 'ID',
+      field: 'id',
+      width: '6rem',
+      minWidth: '5rem',
+      maxWidth: '8rem',
+      sortable: true,
+      filterable: true,
+      resizable: true,
+      disableHide: true,
+    },
     {
       id: 'customer',
       header: 'Customer',
       field: 'customer',
       width: '15rem',
+      minWidth: '11rem',
+      maxWidth: '22rem',
       editable: true,
+      sortable: true,
+      resizable: true,
       headerTemplate: this.customerHeaderTemplate() as
         | TemplateRef<GridHeaderTemplateContext<CustomerRow>>
         | undefined,
     },
-    { id: 'company', header: 'Company', field: 'company', width: '16rem', editable: true },
-    { id: 'city', header: 'City', field: 'city', width: '12rem', editable: true },
+    {
+      id: 'company',
+      header: 'Company',
+      field: 'company',
+      width: '16rem',
+      minWidth: '12rem',
+      maxWidth: '24rem',
+      editable: true,
+      sortable: true,
+      resizable: true,
+    },
+    {
+      id: 'city',
+      header: 'City',
+      field: 'city',
+      width: '12rem',
+      minWidth: '9rem',
+      maxWidth: '18rem',
+      editable: true,
+      sortable: true,
+      resizable: true,
+    },
     {
       id: 'country',
       header: 'Country',
       field: 'country',
       width: '10rem',
+      minWidth: '9rem',
+      maxWidth: '16rem',
+      sortable: true,
+      resizable: true,
       cellTemplate: this.countryCellTemplate() as
         | TemplateRef<GridCellTemplateContext<CustomerRow>>
         | undefined,
@@ -74,7 +114,11 @@ export class AppComponent {
       header: 'Segment',
       field: 'segment',
       width: '10rem',
+      minWidth: '9rem',
+      maxWidth: '16rem',
       editable: true,
+      sortable: true,
+      resizable: true,
       filterTemplate: this.segmentFilterTemplate() as
         | TemplateRef<GridFilterTemplateContext<CustomerRow>>
         | undefined,
@@ -84,8 +128,12 @@ export class AppComponent {
       header: 'Balance',
       field: 'balance',
       width: '8rem',
+      minWidth: '7rem',
+      maxWidth: '12rem',
       editable: true,
       editorType: 'number',
+      sortable: true,
+      resizable: true,
       cellRenderer: (row) => `$${row.balance.toLocaleString()}`,
     },
   ]);
@@ -204,6 +252,10 @@ export class AppComponent {
 
   protected onCellEdit(source: string, event: GridCellEdit<unknown>): void {
     this.pushEvent(`${source}: edited ${event.columnId} -> ${event.value}`);
+  }
+
+  protected onColumnResize(source: string, event: GridColumnResizeFinished): void {
+    this.pushEvent(`${source}: resized ${event.columnId} -> ${event.width}`);
   }
 
   private pushEvent(message: string): void {

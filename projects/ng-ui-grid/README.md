@@ -8,6 +8,7 @@ Reusable Angular grid library with:
 - server-side paging/filtering hooks
 - column show/hide
 - drag-and-drop column reordering
+- resizable columns with min/max constraints
 - inline editing
 - custom header, filter, and cell templates
 - CSS variable based styling
@@ -51,8 +52,8 @@ interface UserRow {
 })
 export class UsersComponent {
   columns: GridColumn<UserRow>[] = [
-    { id: 'id', header: 'ID', field: 'id', width: '6rem', disableHide: true },
-    { id: 'name', header: 'Name', field: 'name', editable: true },
+    { id: 'id', header: 'ID', field: 'id', width: '6rem', minWidth: '5rem', sortable: true, disableHide: true },
+    { id: 'name', header: 'Name', field: 'name', editable: true, sortable: true },
     { id: 'company', header: 'Company', field: 'company' },
   ];
 
@@ -83,6 +84,21 @@ themeVars = {
   [themeVars]="themeVars">
 </app-ui-grid>
 ```
+
+## Column behavior
+
+- `sortable` defaults to `false`
+- `filterable` defaults to `true`
+- `resizable` defaults to `true`
+- `width`, `minWidth`, and `maxWidth` accept CSS size strings
+
+## Events
+
+- `sortChanged`
+- `filterChanged`
+- `columnVisibilityChanged`
+- `columnResizeFinished`
+- `cellEdited`
 
 Supported variables include:
 

@@ -19,6 +19,7 @@ import { FormsModule } from '@angular/forms';
 import {
   GridColumn,
   GridCellEdit,
+  GridColumnResizeFinished,
   GridColumnVisibilityChange,
   GridCellTemplateContext,
   GridDataSource,
@@ -46,6 +47,14 @@ interface EditingCellState {
   draftValue: string;
 }
 
+interface ColumnResizeState {
+  columnId: string;
+  startX: number;
+  startWidthPx: number;
+  minWidthPx: number;
+  maxWidthPx: number;
+}
+
 @Component({
   selector: 'app-ui-grid',
   standalone: true,
@@ -69,6 +78,7 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   readonly sortChanged = output<GridSort | null>();
   readonly filterChanged = output<GridFilters>();
   readonly columnVisibilityChanged = output<GridColumnVisibilityChange>();
+  readonly columnResizeFinished = output<GridColumnResizeFinished>();
   readonly cellEdited = output<GridCellEdit<unknown>>();
 
   @ViewChild('bodyScroller') private bodyScroller?: ElementRef<HTMLDivElement>;
@@ -88,10 +98,16 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   protected readonly draggingColumnId = signal<string | null>(null);
   protected readonly dragOverColumnId = signal<string | null>(null);
   protected readonly dragOverSide = signal<'before' | 'after' | null>(null);
+  protected readonly previewColumnOrder = signal<string[] | null>(null);
+  protected readonly resizingColumnId = signal<string | null>(null);
   protected readonly editingCell = signal<EditingCellState | undefined>(undefined);
   protected readonly visibleColumns = computed(() =>
     this.internalColumns().filter((column) => column.visible ?? true),
   );
+  protected readonly renderedColumns = computed(() => {
+    const orderedColumns = this.orderColumns(this.internalColumns(), this.previewColumnOrder());
+    return orderedColumns.filter((column) => column.visible ?? true);
+  });
 
   protected readonly defaultTrackBy = (index: number, row: unknown): unknown =>
     this.trackBy()?.(index, row) ?? row;
@@ -102,6 +118,7 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   private afterRenderTimer?: number;
   private viewReady = false;
   private dragDroppedInsideGrid = false;
+  private resizeState?: ColumnResizeState;
 
   constructor() {
     effect(() => {
@@ -132,6 +149,46 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
     if (this.afterRenderTimer) {
       window.clearTimeout(this.afterRenderTimer);
     }
+  }
+
+  @HostListener('document:mousemove', ['$event'])
+  protected onDocumentMouseMove(event: MouseEvent): void {
+    if (!this.resizeState) {
+      return;
+    }
+
+    const widthPx = this.clampWidth(
+      this.resizeState.startWidthPx + (event.clientX - this.resizeState.startX),
+      this.resizeState.minWidthPx,
+      this.resizeState.maxWidthPx,
+    );
+
+    this.internalColumns.update((columns) =>
+      columns.map((column) =>
+        column.id === this.resizeState?.columnId
+          ? { ...column, width: `${Math.round(widthPx)}px` }
+          : column,
+      ),
+    );
+  }
+
+  @HostListener('document:mouseup')
+  protected onDocumentMouseUp(): void {
+    if (!this.resizeState) {
+      return;
+    }
+
+    const column = this.internalColumns().find((item) => item.id === this.resizeState?.columnId);
+    if (column?.width) {
+      this.columnResizeFinished.emit({
+        columnId: column.id,
+        width: column.width,
+        widthPx: this.toPixels(column.width, this.resizeState.startWidthPx),
+      });
+    }
+
+    this.resizeState = undefined;
+    this.resizingColumnId.set(null);
   }
 
   protected toggleSort(column: GridColumn<unknown>): void {
@@ -240,9 +297,15 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   }
 
   protected onHeaderDragStart(event: DragEvent, columnId: string): void {
+    if (this.resizingColumnId()) {
+      event.preventDefault();
+      return;
+    }
+
     this.draggingColumnId.set(columnId);
     this.dragOverColumnId.set(null);
     this.dragOverSide.set(null);
+    this.previewColumnOrder.set(this.internalColumns().map((column) => column.id));
     this.dragDroppedInsideGrid = false;
 
     if (event.dataTransfer) {
@@ -262,8 +325,15 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
     const bounds = target.getBoundingClientRect();
     const side = event.clientX <= bounds.left + bounds.width / 2 ? 'before' : 'after';
 
+    if (this.dragOverColumnId() === columnId && this.dragOverSide() === side) {
+      return;
+    }
+
     this.dragOverColumnId.set(columnId);
     this.dragOverSide.set(side);
+    this.previewColumnOrder.set(
+      this.reorderedIds(this.previewColumnOrder() ?? this.internalColumns().map((column) => column.id), draggingColumnId, columnId, side),
+    );
   }
 
   protected onHeaderDrop(event: DragEvent, targetColumnId: string): void {
@@ -278,7 +348,17 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
     const bounds = target.getBoundingClientRect();
     const side = event.clientX <= bounds.left + bounds.width / 2 ? 'before' : 'after';
 
-    this.moveColumn(draggingColumnId, targetColumnId, side);
+    this.internalColumns.update((columns) =>
+      this.orderColumns(
+        columns,
+        this.reorderedIds(
+          this.previewColumnOrder() ?? columns.map((column) => column.id),
+          draggingColumnId,
+          targetColumnId,
+          side,
+        ),
+      ),
+    );
     this.dragDroppedInsideGrid = true;
     this.resetDragState();
   }
@@ -312,6 +392,39 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
 
   protected showDropIndicator(columnId: string, side: 'before' | 'after'): boolean {
     return this.dragOverColumnId() === columnId && this.dragOverSide() === side;
+  }
+
+  protected isDragTarget(columnId: string): boolean {
+    return this.dragOverColumnId() === columnId;
+  }
+
+  protected onHeaderMouseDown(event: MouseEvent, columnId: string): void {
+    const headerCell = event.currentTarget as HTMLElement;
+    if (!this.shouldStartResize(event, headerCell, columnId)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const column = this.internalColumns().find((item) => item.id === columnId);
+    if (!column?.resizable) {
+      return;
+    }
+
+    const startWidthPx = headerCell.getBoundingClientRect().width;
+    this.resizeState = {
+      columnId,
+      startX: event.clientX,
+      startWidthPx,
+      minWidthPx: this.toPixels(column.minWidth, 72),
+      maxWidthPx: this.toPixels(column.maxWidth, Number.POSITIVE_INFINITY),
+    };
+    this.resizingColumnId.set(columnId);
+  }
+
+  protected isResizingColumn(columnId: string): boolean {
+    return this.resizingColumnId() === columnId;
   }
 
   protected sortIndicator(column: GridColumn<unknown>): string {
@@ -368,6 +481,22 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
 
   protected filterValue(columnId: string): string {
     return this.filterState()[columnId] ?? '';
+  }
+
+  protected columnWidth(column: GridColumn<unknown>): string | null {
+    return column.width ?? null;
+  }
+
+  protected columnMinWidth(column: GridColumn<unknown>): string | null {
+    return column.minWidth ?? null;
+  }
+
+  protected columnMaxWidth(column: GridColumn<unknown>): string | null {
+    return column.maxWidth ?? null;
+  }
+
+  protected columnFlex(column: GridColumn<unknown>): string {
+    return column.width ? '0 0 auto' : '1 1 0';
   }
 
   protected isEditable(column: GridColumn<unknown>): boolean {
@@ -484,12 +613,17 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
     const currentVisibility = untracked(
       () => new Map(this.internalColumns().map((column) => [column.id, column.visible ?? true])),
     );
+    const currentWidths = untracked(
+      () => new Map(this.internalColumns().map((column) => [column.id, column.width])),
+    );
 
     this.internalColumns.set(
       columns.map((column) => ({
         ...column,
-        sortable: column.sortable ?? true,
+        sortable: column.sortable ?? false,
         filterable: column.filterable ?? true,
+        resizable: column.resizable ?? true,
+        width: currentWidths.get(column.id) ?? column.width,
         visible: currentVisibility.get(column.id) ?? column.visible ?? true,
       })),
     );
@@ -692,41 +826,109 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
     return typeof this.dataSource() === 'function';
   }
 
-  private moveColumn(
-    draggingColumnId: string,
-    targetColumnId: string,
-    side: 'before' | 'after',
-  ): void {
-    this.internalColumns.update((columns) => {
-      const sourceIndex = columns.findIndex((column) => column.id === draggingColumnId);
-      const targetIndex = columns.findIndex((column) => column.id === targetColumnId);
-
-      if (sourceIndex === -1 || targetIndex === -1) {
-        return columns;
-      }
-
-      const reordered = [...columns];
-      const [movedColumn] = reordered.splice(sourceIndex, 1);
-      let insertionIndex = reordered.findIndex((column) => column.id === targetColumnId);
-
-      if (insertionIndex === -1) {
-        return columns;
-      }
-
-      if (side === 'after') {
-        insertionIndex += 1;
-      }
-
-      reordered.splice(insertionIndex, 0, movedColumn);
-      return reordered;
-    });
-  }
-
   private resetDragState(): void {
     this.draggingColumnId.set(null);
     this.dragOverColumnId.set(null);
     this.dragOverSide.set(null);
+    this.previewColumnOrder.set(null);
     this.dragDroppedInsideGrid = false;
+  }
+
+  private reorderedIds(
+    columnIds: string[],
+    draggingColumnId: string,
+    targetColumnId: string,
+    side: 'before' | 'after',
+  ): string[] {
+    const sourceIndex = columnIds.findIndex((columnId) => columnId === draggingColumnId);
+    const targetIndex = columnIds.findIndex((columnId) => columnId === targetColumnId);
+
+    if (sourceIndex === -1 || targetIndex === -1) {
+      return columnIds;
+    }
+
+    const reorderedIds = [...columnIds];
+    const [movedColumnId] = reorderedIds.splice(sourceIndex, 1);
+    let insertionIndex = reorderedIds.findIndex((columnId) => columnId === targetColumnId);
+
+    if (insertionIndex === -1) {
+      return columnIds;
+    }
+
+    if (side === 'after') {
+      insertionIndex += 1;
+    }
+
+    reorderedIds.splice(insertionIndex, 0, movedColumnId);
+    return reorderedIds;
+  }
+
+  private orderColumns(
+    columns: GridColumn<unknown>[],
+    orderedIds: string[] | null,
+  ): GridColumn<unknown>[] {
+    if (!orderedIds?.length) {
+      return columns;
+    }
+
+    const columnMap = new Map(columns.map((column) => [column.id, column]));
+    const orderedColumns = orderedIds
+      .map((columnId) => columnMap.get(columnId))
+      .filter((column): column is GridColumn<unknown> => !!column);
+
+    return orderedColumns.length === columns.length ? orderedColumns : columns;
+  }
+
+  private clampWidth(widthPx: number, minWidthPx: number, maxWidthPx: number): number {
+    return Math.min(Math.max(widthPx, minWidthPx), maxWidthPx);
+  }
+
+  private shouldStartResize(
+    event: MouseEvent,
+    headerCell: HTMLElement,
+    columnId: string,
+  ): boolean {
+    const column = this.internalColumns().find((item) => item.id === columnId);
+    if (!column?.resizable) {
+      return false;
+    }
+
+    const target = event.target as HTMLElement | null;
+    if (
+      target?.closest(
+        'button, input, select, textarea, option, [contenteditable="true"], .drag-handle',
+      )
+    ) {
+      return false;
+    }
+
+    const bounds = headerCell.getBoundingClientRect();
+    return bounds.right - event.clientX <= 10;
+  }
+
+  private toPixels(size: string | undefined, fallback: number): number {
+    if (!size) {
+      return fallback;
+    }
+
+    const parsed = Number.parseFloat(size);
+    if (Number.isNaN(parsed)) {
+      return fallback;
+    }
+
+    if (/^\d+(\.\d+)?(px)?$/.test(size.trim())) {
+      return parsed;
+    }
+
+    const probe = document.createElement('div');
+    probe.style.position = 'absolute';
+    probe.style.visibility = 'hidden';
+    probe.style.pointerEvents = 'none';
+    probe.style.width = size;
+    document.body.appendChild(probe);
+    const widthPx = probe.getBoundingClientRect().width;
+    probe.remove();
+    return widthPx || fallback;
   }
 
   private applyCellValue(row: unknown, column: GridColumn<unknown>, value: unknown): void {

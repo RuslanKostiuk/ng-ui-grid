@@ -26,6 +26,7 @@
       (sortChanged)="onSortChange('Local grid', $event)"
       (filterChanged)="onFilterChange('Local grid', $event)"
       (columnVisibilityChanged)="onColumnToggle('Local grid', $event.columnId, $event.visible)"
+      (columnResizeFinished)="onColumnResize('Local grid', $event)"
       (cellEdited)="onCellEdit('Local grid', $event)">
     </app-ui-grid>
   </section>
@@ -48,6 +49,7 @@
       (sortChanged)="onSortChange('Server grid', $event)"
       (filterChanged)="onFilterChange('Server grid', $event)"
       (columnVisibilityChanged)="onColumnToggle('Server grid', $event.columnId, $event.visible)"
+      (columnResizeFinished)="onColumnResize('Server grid', $event)"
       (cellEdited)="onCellEdit('Server grid', $event)">
     </app-ui-grid>
   </section>

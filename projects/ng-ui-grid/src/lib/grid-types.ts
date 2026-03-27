@@ -37,11 +37,14 @@ export interface GridColumn<T> {
   field?: keyof T & string;
   sortable?: boolean;
   filterable?: boolean;
+  resizable?: boolean;
   editable?: boolean;
   editorType?: GridEditorType;
   visible?: boolean;
   disableHide?: boolean;
   width?: string;
+  minWidth?: string;
+  maxWidth?: string;
   filterPlaceholder?: string;
   headerTemplate?: TemplateRef<GridHeaderTemplateContext<T>>;
   filterTemplate?: TemplateRef<GridFilterTemplateContext<T>>;
@@ -54,6 +57,12 @@ export interface GridColumn<T> {
 export interface GridColumnVisibilityChange {
   columnId: string;
   visible: boolean;
+}
+
+export interface GridColumnResizeFinished {
+  columnId: string;
+  width: string;
+  widthPx: number;
 }
 
 export interface GridCellEdit<T> {

@@ -82,6 +82,7 @@ export class UsersComponent {
 - column show/hide
 - drag-and-drop column reorder
 - drag-out column hide
+- resizable columns with min/max constraints
 - inline editing
 - row context menu
 - grid main menu
@@ -157,6 +158,10 @@ Selector:
 
 - Fires when a column is shown or hidden.
 
+`columnResizeFinished: { columnId, width, widthPx }`
+
+- Fires when column resize drag ends.
+
 `cellEdited: { row, columnId, previousValue, value }`
 
 - Fires when inline cell editing commits a new value.
@@ -168,13 +173,16 @@ Selector:
 - `id: string`
 - `header: string`
 - `field?: keyof T & string`
-- `sortable?: boolean`
-- `filterable?: boolean`
+- `sortable?: boolean` default `false`
+- `filterable?: boolean` default `true`
+- `resizable?: boolean` default `true`
 - `editable?: boolean`
 - `editorType?: 'text' | 'number'`
 - `visible?: boolean`
 - `disableHide?: boolean`
 - `width?: string`
+- `minWidth?: string`
+- `maxWidth?: string`
 - `filterPlaceholder?: string`
 - `headerTemplate?: TemplateRef<GridHeaderTemplateContext<T>>`
 - `filterTemplate?: TemplateRef<GridFilterTemplateContext<T>>`
@@ -188,6 +196,8 @@ Selector:
 - `field` is the default value source.
 - `valueGetter` lets you derive display/sort/filter values.
 - `valueSetter` lets inline editing write back into complex row models.
+- `width`, `minWidth`, and `maxWidth` accept CSS sizes such as `180px`, `12rem`, or `20%`.
+- `resizable` controls whether the header shows a drag handle for column resizing.
 - `cellRenderer` is for string output.
 - `cellTemplate` is for custom markup.
 - `headerTemplate` and `filterTemplate` let you fully customize header/filter UI.

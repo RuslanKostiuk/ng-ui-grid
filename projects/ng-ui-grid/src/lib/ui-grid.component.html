@@ -1,4 +1,7 @@
-<section class="grid-shell" [ngStyle]="themeVars()">
+<section
+  class="grid-shell"
+  [class.grid-shell-resizing]="!!resizingColumnId()"
+  [ngStyle]="themeVars()">
   <header class="grid-toolbar">
     <div class="grid-summary">
       <strong>{{ displayedRows().length }}</strong>
@@ -48,19 +51,25 @@
     <div #bodyScroller class="grid-viewport" (scroll)="onBodyScroll($event)">
       <div class="grid-table">
         <div class="grid-header">
-          @for (column of visibleColumns(); track column.id) {
+          @for (column of renderedColumns(); track column.id) {
             <div
               class="header-cell"
               draggable="true"
               [class.header-cell-dragging]="isDraggingColumn(column.id)"
               [class.header-cell-drop-before]="showDropIndicator(column.id, 'before')"
               [class.header-cell-drop-after]="showDropIndicator(column.id, 'after')"
-              [style.width]="column.width ?? null"
-              [style.flex]="column.width ? '0 0 auto' : '1 1 0'"
+              [class.header-cell-drop-target]="isDragTarget(column.id)"
+              [class.header-cell-resizing]="isResizingColumn(column.id)"
+              [style.width]="columnWidth(column)"
+              [style.minWidth]="columnMinWidth(column)"
+              [style.maxWidth]="columnMaxWidth(column)"
+              [style.flex]="columnFlex(column)"
+              [class.header-cell-can-resize]="column.resizable"
               (dragstart)="onHeaderDragStart($event, column.id)"
               (dragover)="onHeaderDragOver($event, column.id)"
               (drop)="onHeaderDrop($event, column.id)"
-              (dragend)="onHeaderDragEnd($event, column.id)">
+              (dragend)="onHeaderDragEnd($event, column.id)"
+              (mousedown)="onHeaderMouseDown($event, column.id)">
               @if (column.headerTemplate) {
                 <ng-container
                   [ngTemplateOutlet]="column.headerTemplate"
@@ -106,12 +115,14 @@
           <div
             class="grid-row"
             (contextmenu)="openContextMenu($event, row)">
-            @for (column of visibleColumns(); track column.id) {
+            @for (column of renderedColumns(); track column.id) {
               <div
                 class="grid-cell"
                 [class.grid-cell-editable]="isEditable(column)"
-                [style.width]="column.width ?? null"
-                [style.flex]="column.width ? '0 0 auto' : '1 1 0'"
+                [style.width]="columnWidth(column)"
+                [style.minWidth]="columnMinWidth(column)"
+                [style.maxWidth]="columnMaxWidth(column)"
+                [style.flex]="columnFlex(column)"
                 (dblclick)="startInlineEdit(row, column)">
                 @if (isEditingCell(row, column.id)) {
                   <input
