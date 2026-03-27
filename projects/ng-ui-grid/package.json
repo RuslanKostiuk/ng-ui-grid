@@ -1,7 +1,9 @@
 {
-  "name": "ng-ui-grid",
+  "name": "@ruslankostiuk/ng-ui-grid",
   "version": "0.1.0",
   "description": "Reusable Angular grid with sorting, filtering, infinite scroll, menus, drag-drop columns, inline editing, and template renderers.",
+  "author": "Ruslan Kostiuk <ruslankostiuk@gmail.com>",
+  "license": "MIT",
   "keywords": [
     "angular",
     "grid",
@@ -9,6 +11,14 @@
     "infinite-scroll",
     "data-grid"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RuslanKostiuk/ng-ui-grid.git"
+  },
+  "homepage": "https://github.com/RuslanKostiuk/ng-ui-grid#readme",
+  "bugs": {
+    "url": "https://github.com/RuslanKostiuk/ng-ui-grid/issues"
+  },
   "peerDependencies": {
     "@angular/common": "^21.0.0",
     "@angular/core": "^21.0.0",

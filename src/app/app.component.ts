@@ -21,7 +21,7 @@ import {
   GridPageResult,
   GridSort,
   UiGridComponent,
-} from 'ng-ui-grid';
+} from '@ruslankostiuk/ng-ui-grid';
 
 interface CustomerRow {
   id: number;

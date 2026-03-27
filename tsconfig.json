@@ -15,7 +15,7 @@
     "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
-      "ng-ui-grid": [
+      "@ruslankostiuk/ng-ui-grid": [
         "./projects/ng-ui-grid/src/public-api.ts"
       ]
     },
