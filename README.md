@@ -154,6 +154,7 @@ Selector:
 `filterChanged: GridFilters`
 
 - Fires when filter state changes.
+- Payload shape: `{ [columnId]: { operator, value, valueTo? } }`
 
 `columnVisibilityChanged: { columnId: string; visible: boolean }`
 
@@ -176,6 +177,10 @@ Selector:
 - `field?: keyof T & string`
 - `sortable?: boolean` default `false`
 - `filterable?: boolean` default `true`
+- `extendedFilter?: boolean`
+- `filterOperators?: GridFilterOperator[]`
+- `defaultFilterOperator?: GridFilterOperator`
+- `filterMenuIcon?: string`
 - `resizable?: boolean` default `true`
 - `editable?: boolean`
 - `editorType?: 'text' | 'number'`
@@ -199,6 +204,10 @@ Selector:
 - `valueSetter` lets inline editing write back into complex row models.
 - `width`, `minWidth`, and `maxWidth` accept CSS sizes such as `180px`, `12rem`, or `20%`.
 - `resizable` controls whether the header shows a drag handle for column resizing.
+- `extendedFilter` keeps the classic header input visible and adds an advanced filter popover behind the filter button.
+- `filterOperators` limits which operators are available for that column.
+- `defaultFilterOperator` controls the initial operator. Default is `equals` for extended filters and `contains` for standard filters.
+- `filterMenuIcon` customizes the small advanced-filter trigger icon for extended filters.
 - `cellRenderer` is for string output.
 - `cellTemplate` is for custom markup.
 - `headerTemplate` and `filterTemplate` let you fully customize header/filter UI.
@@ -215,8 +224,29 @@ Selector:
 `GridFilterTemplateContext<T>`
 
 - `column`
+- `filter`
+- `operator`
 - `value`
+- `valueTo`
+- `availableOperators`
 - `setValue(value: string)`
+- `setValueTo(value: string)`
+- `setOperator(operator)`
+
+## Filter Operators
+
+Available operators:
+
+- `contains`
+- `equals`
+- `notEqual`
+- `startsWith`
+- `endsWith`
+- `greater`
+- `greaterOrEqual`
+- `less`
+- `lessOrEqual`
+- `between`
 
 `GridCellTemplateContext<T>`
 

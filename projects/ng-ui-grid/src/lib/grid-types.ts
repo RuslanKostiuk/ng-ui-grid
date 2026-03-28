@@ -2,13 +2,35 @@ import { TemplateRef } from '@angular/core';
 
 export type GridSortDirection = 'asc' | 'desc';
 export type GridEditorType = 'text' | 'number';
+export type GridFilterOperator =
+  | 'contains'
+  | 'equals'
+  | 'notEqual'
+  | 'startsWith'
+  | 'endsWith'
+  | 'greater'
+  | 'greaterOrEqual'
+  | 'less'
+  | 'lessOrEqual'
+  | 'between';
 
 export interface GridSort {
   columnId: string;
   direction: GridSortDirection;
 }
 
-export type GridFilters = Record<string, string>;
+export interface GridFilter {
+  operator: GridFilterOperator;
+  value: string;
+  valueTo?: string;
+}
+
+export interface GridFilterOperatorOption {
+  value: GridFilterOperator;
+  label: string;
+}
+
+export type GridFilters = Record<string, GridFilter>;
 
 export interface GridHeaderTemplateContext<T> {
   column: GridColumn<T>;
@@ -19,8 +41,14 @@ export interface GridHeaderTemplateContext<T> {
 
 export interface GridFilterTemplateContext<T> {
   column: GridColumn<T>;
+  filter: GridFilter;
+  operator: GridFilterOperator;
   value: string;
+  valueTo: string;
+  availableOperators: GridFilterOperatorOption[];
   setValue: (value: string) => void;
+  setValueTo: (value: string) => void;
+  setOperator: (operator: GridFilterOperator) => void;
 }
 
 export interface GridCellTemplateContext<T> {
@@ -37,6 +65,10 @@ export interface GridColumn<T> {
   field?: keyof T & string;
   sortable?: boolean;
   filterable?: boolean;
+  extendedFilter?: boolean;
+  filterOperators?: GridFilterOperator[];
+  defaultFilterOperator?: GridFilterOperator;
+  filterMenuIcon?: string;
   resizable?: boolean;
   editable?: boolean;
   editorType?: GridEditorType;
@@ -93,7 +125,7 @@ export interface GridMenuContext<T> {
   filters: GridFilters;
   refresh: () => void;
   clearFilters: () => void;
-  setFilter: (columnId: string, value: string) => void;
+  setFilter: (columnId: string, filter: string | Partial<GridFilter>) => void;
   setSort: (sort: GridSort | null) => void;
   toggleColumn: (columnId: string) => void;
 }

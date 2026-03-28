@@ -99,12 +99,65 @@
                     [ngTemplateOutletContext]="filterTemplateContext(column)">
                   </ng-container>
                 } @else {
-                  <input
-                    type="text"
-                    class="filter-input"
-                    [ngModel]="filterValue(column.id)"
-                    [placeholder]="column.filterPlaceholder || 'Filter...'"
-                    (ngModelChange)="onFilterInput(column.id, $event)">
+                  <div class="filter-inline">
+                    <input
+                      [type]="classicFilterInputType(column)"
+                      class="filter-input"
+                      [ngModel]="classicFilterValue(column)"
+                      [disabled]="isClassicFilterDisabled(column)"
+                      [placeholder]="column.filterPlaceholder || 'Filter...'"
+                      (ngModelChange)="onFilterInput(column.id, $event)">
+
+                    @if (column.extendedFilter) {
+                      <span class="filter-menu-anchor">
+                        <button
+                          type="button"
+                          class="filter-menu-trigger"
+                          [class.filter-menu-trigger-active]="isFilterMenuOpen(column.id) || hasExtendedFilterApplied(column)"
+                          title="Advanced filter"
+                          (click)="toggleFilterMenu($event, column.id)">
+                          {{ filterMenuIcon(column) }}
+                        </button>
+
+                        @if (isFilterMenuOpen(column.id)) {
+                          <div class="filter-menu-panel" (click)="$event.stopPropagation()">
+                            <div class="menu-title">
+                              {{ column.header }} filter
+                            </div>
+
+                            <div class="filter-stack">
+                              <select
+                                class="filter-operator"
+                                [ngModel]="filterOperator(column)"
+                                (ngModelChange)="onFilterOperatorChange(column.id, $event)">
+                                @for (option of filterOperatorOptions(column); track option.value) {
+                                  <option [value]="option.value">
+                                    {{ option.label }}
+                                  </option>
+                                }
+                              </select>
+
+                              <input
+                                [type]="filterInputType(column)"
+                                class="filter-input"
+                                [ngModel]="filterValue(column.id)"
+                                [placeholder]="column.filterPlaceholder || 'Value...'"
+                                (ngModelChange)="onAdvancedFilterInput(column.id, $event)">
+
+                              @if (showsSecondaryFilterValue(column)) {
+                                <input
+                                  [type]="filterInputType(column)"
+                                  class="filter-input"
+                                  [ngModel]="filterValueTo(column.id)"
+                                  placeholder="And..."
+                                  (ngModelChange)="onFilterValueToInput(column.id, $event)">
+                              }
+                            </div>
+                          </div>
+                        }
+                      </span>
+                    }
+                  </div>
                 }
               }
             </div>

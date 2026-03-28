@@ -90,8 +90,25 @@ themeVars = {
 
 - `sortable` defaults to `false`
 - `filterable` defaults to `true`
+- `extendedFilter` keeps the classic filter input and adds an advanced operator popover
+- `filterOperators` restricts the operator list per column
+- `defaultFilterOperator` sets the initial operator
+- `filterMenuIcon` customizes the advanced filter trigger icon
 - `resizable` defaults to `true`
 - `width`, `minWidth`, and `maxWidth` accept CSS size strings
+
+Available filter operators:
+
+- `contains`
+- `equals`
+- `notEqual`
+- `startsWith`
+- `endsWith`
+- `greater`
+- `greaterOrEqual`
+- `less`
+- `lessOrEqual`
+- `between`
 
 ## Events
 

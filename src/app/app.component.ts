@@ -14,6 +14,7 @@ import {
   GridColumn,
   GridColumnResizeFinished,
   GridDataSource,
+  GridFilter,
   GridFilterTemplateContext,
   GridFilters,
   GridHeaderTemplateContext,
@@ -134,6 +135,8 @@ export class AppComponent {
       editorType: 'number',
       sortable: true,
       resizable: true,
+      extendedFilter: true,
+      filterOperators: ['equals', 'greater', 'greaterOrEqual', 'less', 'lessOrEqual', 'between'],
       cellRenderer: (row) => `$${row.balance.toLocaleString()}`,
     },
   ]);
@@ -239,8 +242,8 @@ export class AppComponent {
 
   protected onFilterChange(source: string, filters: GridFilters): void {
     const activeFilters = Object.entries(filters)
-      .filter(([, value]) => value.trim())
-      .map(([column, value]) => `${column}=${value}`)
+      .filter(([, filter]) => hasActiveFilter(filter))
+      .map(([column, filter]) => formatFilterEvent(column, filter))
       .join(', ') || 'cleared';
 
     this.pushEvent(`${source}: filters ${activeFilters}`);
@@ -295,15 +298,14 @@ function applyFilters(
   filters: GridFilters,
 ): CustomerRow[] {
   return rows.filter((row) =>
-    Object.entries(filters).every(([columnId, filterValue]) => {
-      const normalized = filterValue.trim().toLowerCase();
-      if (!normalized) {
+    Object.entries(filters).every(([columnId, filter]) => {
+      if (!hasActiveFilter(filter)) {
         return true;
       }
 
       const column = columns.find((item) => item.id === columnId);
       const value = readColumnValue(row, column);
-      return String(value ?? '').toLowerCase().includes(normalized);
+      return matchesFilter(value, filter);
     }),
   );
 }
@@ -352,4 +354,111 @@ function readColumnValue(row: CustomerRow, column?: GridColumn<CustomerRow>): un
   }
 
   return row[column.id as keyof CustomerRow];
+}
+
+function hasActiveFilter(filter?: GridFilter): boolean {
+  if (!filter) {
+    return false;
+  }
+
+  if (filter.operator === 'between') {
+    return !!filter.value.trim() || !!(filter.valueTo ?? '').trim();
+  }
+
+  return !!filter.value.trim();
+}
+
+function formatFilterEvent(column: string, filter: GridFilter): string {
+  if (filter.operator === 'between') {
+    return `${column}:${filter.operator}(${filter.value}..${filter.valueTo ?? ''})`;
+  }
+
+  return `${column}:${filter.operator}(${filter.value})`;
+}
+
+function matchesFilter(value: unknown, filter: GridFilter): boolean {
+  const leftText = String(value ?? '').trim().toLowerCase();
+  const rightText = filter.value.trim().toLowerCase();
+  const rightTextTo = (filter.valueTo ?? '').trim().toLowerCase();
+  const leftNumber = toComparableNumber(value);
+  const rightNumber = toComparableNumber(filter.value);
+  const rightNumberTo = toComparableNumber(filter.valueTo);
+
+  switch (filter.operator) {
+    case 'contains':
+      return leftText.includes(rightText);
+    case 'equals':
+      if (leftNumber != null && rightNumber != null) {
+        return leftNumber === rightNumber;
+      }
+      return leftText === rightText;
+    case 'notEqual':
+      if (leftNumber != null && rightNumber != null) {
+        return leftNumber !== rightNumber;
+      }
+      return leftText !== rightText;
+    case 'startsWith':
+      return leftText.startsWith(rightText);
+    case 'endsWith':
+      return leftText.endsWith(rightText);
+    case 'greater':
+      return compareFilterValues(leftText, rightText, leftNumber, rightNumber) > 0;
+    case 'greaterOrEqual':
+      return compareFilterValues(leftText, rightText, leftNumber, rightNumber) >= 0;
+    case 'less':
+      return compareFilterValues(leftText, rightText, leftNumber, rightNumber) < 0;
+    case 'lessOrEqual':
+      return compareFilterValues(leftText, rightText, leftNumber, rightNumber) <= 0;
+    case 'between': {
+      if (leftNumber != null && (rightNumber != null || rightNumberTo != null)) {
+        const min = Math.min(rightNumber ?? leftNumber, rightNumberTo ?? leftNumber);
+        const max = Math.max(rightNumber ?? leftNumber, rightNumberTo ?? leftNumber);
+        return leftNumber >= min && leftNumber <= max;
+      }
+
+      const bounds = [rightText, rightTextTo].filter(Boolean);
+      if (bounds.length === 1) {
+        return leftText >= bounds[0];
+      }
+
+      bounds.sort((left, right) => left.localeCompare(right));
+      return leftText >= bounds[0] && leftText <= bounds[1];
+    }
+    default:
+      return true;
+  }
+}
+
+function compareFilterValues(
+  leftText: string,
+  rightText: string,
+  leftNumber: number | null,
+  rightNumber: number | null,
+): number {
+  if (leftNumber != null && rightNumber != null) {
+    return leftNumber - rightNumber;
+  }
+
+  return leftText.localeCompare(rightText, undefined, {
+    numeric: true,
+    sensitivity: 'base',
+  });
+}
+
+function toComparableNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.replaceAll(',', '').trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
 }

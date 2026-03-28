@@ -19,6 +19,9 @@ import { FormsModule } from '@angular/forms';
 import {
   GridColumn,
   GridCellEdit,
+  GridFilter,
+  GridFilterOperator,
+  GridFilterOperatorOption,
   GridColumnResizeFinished,
   GridColumnVisibilityChange,
   GridCellTemplateContext,
@@ -33,6 +36,26 @@ import {
   GridPageResult,
   GridSort,
 } from './grid-types';
+
+const DEFAULT_EXTENDED_FILTER_OPERATORS: GridFilterOperator[] = [
+  'equals',
+  'greater',
+  'less',
+  'between',
+];
+
+const FILTER_OPERATOR_LABELS: Record<GridFilterOperator, string> = {
+  contains: 'Contains',
+  equals: 'Equal',
+  notEqual: 'Not equal',
+  startsWith: 'Starts with',
+  endsWith: 'Ends with',
+  greater: 'Greater',
+  greaterOrEqual: 'Greater or equal',
+  less: 'Less',
+  lessOrEqual: 'Less or equal',
+  between: 'Between',
+};
 
 interface ContextMenuState {
   x: number;
@@ -100,6 +123,7 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   protected readonly showMainMenu = signal(false);
   protected readonly resolvedMainMenuItems = signal<GridMenuItem<unknown>[]>([]);
   protected readonly contextMenu = signal<ContextMenuState | undefined>(undefined);
+  protected readonly filterMenuColumnId = signal<string | null>(null);
   protected readonly draggingColumnId = signal<string | null>(null);
   protected readonly dragOverColumnId = signal<string | null>(null);
   protected readonly dragOverSide = signal<'before' | 'after' | null>(null);
@@ -235,19 +259,28 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   }
 
   protected onFilterInput(columnId: string, value: string): void {
-    this.filterState.update((state) => ({
-      ...state,
-      [columnId]: value,
-    }));
+    const column = this.internalColumns().find((item) => item.id === columnId);
+    this.updateColumnFilter(
+      columnId,
+      column?.extendedFilter
+        ? { operator: 'equals', value, valueTo: '' }
+        : { value },
+    );
+  }
 
-    if (this.filterTimer) {
-      window.clearTimeout(this.filterTimer);
-    }
+  protected onAdvancedFilterInput(columnId: string, value: string): void {
+    this.updateColumnFilter(columnId, { value });
+  }
 
-    this.filterTimer = window.setTimeout(() => {
-      this.filterChanged.emit({ ...this.filterState() });
-      this.resetGrid();
-    }, 180);
+  protected onFilterValueToInput(columnId: string, valueTo: string): void {
+    this.updateColumnFilter(columnId, { valueTo });
+  }
+
+  protected onFilterOperatorChange(columnId: string, operator: GridFilterOperator): void {
+    this.updateColumnFilter(columnId, {
+      operator,
+      valueTo: operator === 'between' ? this.filterValueTo(columnId) : '',
+    });
   }
 
   protected onBodyScroll(event: Event): void {
@@ -266,6 +299,7 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   protected toggleMainMenu(event: MouseEvent): void {
     event.stopPropagation();
     this.contextMenu.set(undefined);
+    this.filterMenuColumnId.set(null);
     const nextValue = !this.showMainMenu();
     this.showMainMenu.set(nextValue);
 
@@ -289,6 +323,7 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
     }
 
     this.showMainMenu.set(false);
+    this.filterMenuColumnId.set(null);
     this.contextMenu.set({
       x: event.clientX,
       y: event.clientY,
@@ -300,6 +335,17 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   protected runContextMenuItem(item: GridMenuItem<unknown>, row: unknown): void {
     item.action(this.buildMenuContext(row));
     this.contextMenu.set(undefined);
+  }
+
+  protected toggleFilterMenu(event: MouseEvent, columnId: string): void {
+    event.preventDefault();
+    event.stopPropagation();
+
+    this.showMainMenu.set(false);
+    this.contextMenu.set(undefined);
+    this.filterMenuColumnId.update((currentColumnId) =>
+      currentColumnId === columnId ? null : columnId,
+    );
   }
 
   protected setColumnVisibility(columnId: string, visible: boolean): void {
@@ -490,10 +536,17 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   protected filterTemplateContext(
     column: GridColumn<unknown>,
   ): GridFilterTemplateContext<unknown> {
+    const filter = this.filterForColumn(column);
     return {
       column,
-      value: this.filterValue(column.id),
-      setValue: (value: string) => this.onFilterInput(column.id, value),
+      filter,
+      operator: filter.operator,
+      value: filter.value,
+      valueTo: filter.valueTo ?? '',
+      availableOperators: this.filterOperatorOptions(column),
+      setValue: (value: string) => this.onAdvancedFilterInput(column.id, value),
+      setValueTo: (value: string) => this.onFilterValueToInput(column.id, value),
+      setOperator: (operator: GridFilterOperator) => this.onFilterOperatorChange(column.id, operator),
     };
   }
 
@@ -511,7 +564,63 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   }
 
   protected filterValue(columnId: string): string {
-    return this.filterState()[columnId] ?? '';
+    return this.filterState()[columnId]?.value ?? '';
+  }
+
+  protected filterValueTo(columnId: string): string {
+    return this.filterState()[columnId]?.valueTo ?? '';
+  }
+
+  protected filterOperator(column: GridColumn<unknown>): GridFilterOperator {
+    return this.filterForColumn(column).operator;
+  }
+
+  protected isFilterMenuOpen(columnId: string): boolean {
+    return this.filterMenuColumnId() === columnId;
+  }
+
+  protected hasExtendedFilterApplied(column: GridColumn<unknown>): boolean {
+    if (!column.extendedFilter) {
+      return false;
+    }
+
+    const filter = this.filterForColumn(column);
+    return filter.operator !== 'equals' || !!(filter.valueTo ?? '').trim();
+  }
+
+  protected filterMenuIcon(column: GridColumn<unknown>): string {
+    return column.filterMenuIcon ?? '≡';
+  }
+
+  protected classicFilterValue(column: GridColumn<unknown>): string {
+    if (!this.isClassicFilterDisabled(column)) {
+      return this.filterValue(column.id);
+    }
+
+    return this.advancedFilterSummary(column);
+  }
+
+  protected classicFilterInputType(column: GridColumn<unknown>): string {
+    return this.isClassicFilterDisabled(column) ? 'text' : this.filterInputType(column);
+  }
+
+  protected isClassicFilterDisabled(column: GridColumn<unknown>): boolean {
+    return !!column.extendedFilter && this.filterOperator(column) !== 'equals';
+  }
+
+  protected showsSecondaryFilterValue(column: GridColumn<unknown>): boolean {
+    return this.filterOperator(column) === 'between';
+  }
+
+  protected filterInputType(column: GridColumn<unknown>): string {
+    return column.editorType === 'number' ? 'number' : 'text';
+  }
+
+  protected filterOperatorOptions(column: GridColumn<unknown>): GridFilterOperatorOption[] {
+    return this.resolvedFilterOperators(column).map((operator) => ({
+      value: operator,
+      label: FILTER_OPERATOR_LABELS[operator],
+    }));
   }
 
   protected isAlternateRow(index: number): boolean {
@@ -609,13 +718,8 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   }
 
   protected clearFilters(): void {
-    const cleared = Object.keys(this.filterState()).reduce<GridFilters>((accumulator, key) => {
-      accumulator[key] = '';
-      return accumulator;
-    }, {});
-
-    this.filterState.set(cleared);
-    this.filterChanged.emit({ ...cleared });
+    this.filterState.set({});
+    this.filterChanged.emit(this.snapshotFilters());
     this.resetGrid();
   }
 
@@ -623,12 +727,12 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
     this.resetGrid();
   }
 
-  protected setMenuFilter(columnId: string, value: string): void {
+  protected setMenuFilter(columnId: string, filter: string | Partial<GridFilter>): void {
     this.filterState.update((state) => ({
       ...state,
-      [columnId]: value,
+      [columnId]: this.mergeFilterUpdate(columnId, filter, state[columnId]),
     }));
-    this.filterChanged.emit({ ...this.filterState() });
+    this.filterChanged.emit(this.snapshotFilters());
     this.resetGrid();
   }
 
@@ -642,6 +746,7 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   protected closeMenus(): void {
     this.showMainMenu.set(false);
     this.contextMenu.set(undefined);
+    this.filterMenuColumnId.set(null);
   }
 
   private syncColumns(columns: GridColumn<unknown>[]): void {
@@ -657,6 +762,7 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
         ...column,
         sortable: column.sortable ?? false,
         filterable: column.filterable ?? true,
+        extendedFilter: column.extendedFilter ?? false,
         resizable: column.resizable ?? true,
         width: currentWidths.get(column.id) ?? column.width,
         visible: currentVisibility.get(column.id) ?? column.visible ?? true,
@@ -776,9 +882,8 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   }
 
   private matchesFilters(row: unknown): boolean {
-    return Object.entries(this.filterState()).every(([columnId, filterValue]) => {
-      const normalizedFilter = filterValue.trim().toLowerCase();
-      if (!normalizedFilter) {
+    return Object.entries(this.filterState()).every(([columnId, filter]) => {
+      if (!this.isActiveFilter(filter)) {
         return true;
       }
 
@@ -788,7 +893,7 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
       }
 
       const value = this.getColumnValue(row, column);
-      return String(value ?? '').toLowerCase().includes(normalizedFilter);
+      return this.matchesFilterValue(value, filter);
     });
   }
 
@@ -852,7 +957,8 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
       filters: { ...this.filterState() },
       refresh: () => this.refresh(),
       clearFilters: () => this.clearFilters(),
-      setFilter: (columnId: string, value: string) => this.setMenuFilter(columnId, value),
+      setFilter: (columnId: string, filter: string | Partial<GridFilter>) =>
+        this.setMenuFilter(columnId, filter),
       setSort: (sort: GridSort | null) => this.setMenuSort(sort),
       toggleColumn: (columnId: string) => this.toggleColumn(columnId),
     };
@@ -965,6 +1071,212 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
     const widthPx = probe.getBoundingClientRect().width;
     probe.remove();
     return widthPx || fallback;
+  }
+
+  private updateColumnFilter(columnId: string, update: Partial<GridFilter>): void {
+    this.filterState.update((state) => ({
+      ...state,
+      [columnId]: this.mergeFilterUpdate(columnId, update, state[columnId]),
+    }));
+
+    if (this.filterTimer) {
+      window.clearTimeout(this.filterTimer);
+    }
+
+    this.filterTimer = window.setTimeout(() => {
+      this.filterChanged.emit(this.snapshotFilters());
+      this.resetGrid();
+    }, 180);
+  }
+
+  private mergeFilterUpdate(
+    columnId: string,
+    update: string | Partial<GridFilter>,
+    currentFilter?: GridFilter,
+  ): GridFilter {
+    const column = this.internalColumns().find((item) => item.id === columnId);
+    const baseFilter = currentFilter ?? this.defaultFilter(column);
+    if (typeof update === 'string') {
+      const stringFilterBase = this.defaultFilter(column);
+      return {
+        ...stringFilterBase,
+        value: update,
+      };
+    }
+
+    const nextFilter: GridFilter = {
+      ...baseFilter,
+      ...update,
+    };
+
+    if (nextFilter.operator !== 'between') {
+      nextFilter.valueTo = '';
+    }
+
+    return nextFilter;
+  }
+
+  private filterForColumn(column: GridColumn<unknown>): GridFilter {
+    return this.filterState()[column.id] ?? this.defaultFilter(column);
+  }
+
+  private defaultFilter(column?: GridColumn<unknown>): GridFilter {
+    return {
+      operator: this.defaultFilterOperator(column),
+      value: '',
+      valueTo: '',
+    };
+  }
+
+  private defaultFilterOperator(column?: GridColumn<unknown>): GridFilterOperator {
+    if (column?.defaultFilterOperator) {
+      return column.defaultFilterOperator;
+    }
+
+    return column?.extendedFilter ? 'equals' : 'contains';
+  }
+
+  private resolvedFilterOperators(column: GridColumn<unknown>): GridFilterOperator[] {
+    if (column.filterOperators?.length) {
+      return column.filterOperators;
+    }
+
+    return column.extendedFilter ? DEFAULT_EXTENDED_FILTER_OPERATORS : ['contains'];
+  }
+
+  private advancedFilterSummary(column: GridColumn<unknown>): string {
+    const filter = this.filterForColumn(column);
+    switch (filter.operator) {
+      case 'between':
+        return `Between ${filter.value || '...'} and ${filter.valueTo || '...'}`;
+      case 'greater':
+        return `Greater ${filter.value || '...'}`;
+      case 'greaterOrEqual':
+        return `Greater or equal ${filter.value || '...'}`;
+      case 'less':
+        return `Less ${filter.value || '...'}`;
+      case 'lessOrEqual':
+        return `Less or equal ${filter.value || '...'}`;
+      case 'contains':
+        return `Contains ${filter.value || '...'}`;
+      case 'startsWith':
+        return `Starts with ${filter.value || '...'}`;
+      case 'endsWith':
+        return `Ends with ${filter.value || '...'}`;
+      case 'notEqual':
+        return `Not equal ${filter.value || '...'}`;
+      default:
+        return `Equal ${filter.value || '...'}`;
+    }
+  }
+
+  private snapshotFilters(): GridFilters {
+    return Object.fromEntries(
+      Object.entries(this.filterState()).map(([columnId, filter]) => [
+        columnId,
+        { ...filter },
+      ]),
+    );
+  }
+
+  private isActiveFilter(filter?: GridFilter): boolean {
+    if (!filter) {
+      return false;
+    }
+
+    if (filter.operator === 'between') {
+      return !!filter.value.trim() || !!(filter.valueTo ?? '').trim();
+    }
+
+    return !!filter.value.trim();
+  }
+
+  private matchesFilterValue(value: unknown, filter: GridFilter): boolean {
+    const normalizedValue = String(value ?? '').trim();
+    const leftText = normalizedValue.toLowerCase();
+    const rightText = filter.value.trim().toLowerCase();
+    const rightTextTo = (filter.valueTo ?? '').trim().toLowerCase();
+    const numberValue = this.toComparableNumber(value);
+    const numberFilter = this.toComparableNumber(filter.value);
+    const numberFilterTo = this.toComparableNumber(filter.valueTo);
+
+    switch (filter.operator) {
+      case 'contains':
+        return leftText.includes(rightText);
+      case 'equals':
+        if (numberValue != null && numberFilter != null) {
+          return numberValue === numberFilter;
+        }
+        return leftText === rightText;
+      case 'notEqual':
+        if (numberValue != null && numberFilter != null) {
+          return numberValue !== numberFilter;
+        }
+        return leftText !== rightText;
+      case 'startsWith':
+        return leftText.startsWith(rightText);
+      case 'endsWith':
+        return leftText.endsWith(rightText);
+      case 'greater':
+        return this.compareFilterValues(leftText, rightText, numberValue, numberFilter) > 0;
+      case 'greaterOrEqual':
+        return this.compareFilterValues(leftText, rightText, numberValue, numberFilter) >= 0;
+      case 'less':
+        return this.compareFilterValues(leftText, rightText, numberValue, numberFilter) < 0;
+      case 'lessOrEqual':
+        return this.compareFilterValues(leftText, rightText, numberValue, numberFilter) <= 0;
+      case 'between': {
+        if (numberValue != null && (numberFilter != null || numberFilterTo != null)) {
+          const min = Math.min(numberFilter ?? numberValue, numberFilterTo ?? numberValue);
+          const max = Math.max(numberFilter ?? numberValue, numberFilterTo ?? numberValue);
+          return numberValue >= min && numberValue <= max;
+        }
+
+        const bounds = [rightText, rightTextTo].filter(Boolean);
+        if (bounds.length === 1) {
+          return leftText >= bounds[0];
+        }
+
+        const [min, max] = bounds.sort((left, right) => left.localeCompare(right));
+        return leftText >= min && leftText <= max;
+      }
+      default:
+        return true;
+    }
+  }
+
+  private compareFilterValues(
+    leftText: string,
+    rightText: string,
+    leftNumber: number | null,
+    rightNumber: number | null,
+  ): number {
+    if (leftNumber != null && rightNumber != null) {
+      return leftNumber - rightNumber;
+    }
+
+    return leftText.localeCompare(rightText, undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+  }
+
+  private toComparableNumber(value: unknown): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value !== 'string') {
+      return null;
+    }
+
+    const normalized = value.replaceAll(',', '').trim();
+    if (!normalized) {
+      return null;
+    }
+
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 
   private applyCellValue(row: unknown, column: GridColumn<unknown>, value: unknown): void {
