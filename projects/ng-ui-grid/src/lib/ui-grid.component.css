@@ -69,6 +69,10 @@
   min-width: 100%;
 }
 
+.grid-body {
+  min-width: 100%;
+}
+
 .grid-header {
   position: sticky;
   top: 0;
@@ -212,7 +216,7 @@
   color: var(--ui-grid-text);
 }
 
-.grid-row:nth-child(odd) {
+.grid-row-alt {
   background: var(--ui-grid-row-alt-bg);
 }
 

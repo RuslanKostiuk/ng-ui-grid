@@ -5,6 +5,7 @@ Reusable Angular grid library with:
 - sorting
 - header filters
 - infinite scroll
+- virtualized row rendering
 - server-side paging/filtering hooks
 - column show/hide
 - drag-and-drop column reordering

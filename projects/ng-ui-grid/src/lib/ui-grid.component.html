@@ -111,44 +111,50 @@
           }
         </div>
 
-        @for (row of displayedRows(); track defaultTrackBy($index, row)) {
-          <div
-            class="grid-row"
-            (contextmenu)="openContextMenu($event, row)">
-            @for (column of renderedColumns(); track column.id) {
-              <div
-                class="grid-cell"
-                [class.grid-cell-editable]="isEditable(column)"
-                [style.width]="columnWidth(column)"
-                [style.minWidth]="columnMinWidth(column)"
-                [style.maxWidth]="columnMaxWidth(column)"
-                [style.flex]="columnFlex(column)"
-                (dblclick)="startInlineEdit(row, column)">
-                @if (isEditingCell(row, column.id)) {
-                  <input
-                    type="{{ editorType(column) }}"
-                    class="cell-editor"
-                    [ngModel]="editDraftValue(row, column.id)"
-                    autofocus
-                    (ngModelChange)="updateEditDraft($event)"
-                    (blur)="commitInlineEdit(row, column)"
-                    (click)="$event.stopPropagation()"
-                    (keydown.enter)="commitInlineEdit(row, column)"
-                    (keydown.escape)="cancelInlineEdit()">
-                } @else {
-                  @if (column.cellTemplate) {
-                    <ng-container
-                      [ngTemplateOutlet]="column.cellTemplate"
-                      [ngTemplateOutletContext]="cellTemplateContext(row, column)">
-                    </ng-container>
+        <div
+          class="grid-body"
+          [style.paddingTop.px]="virtualPaddingTop()"
+          [style.paddingBottom.px]="virtualPaddingBottom()">
+          @for (rowState of virtualRows(); track defaultTrackBy(rowState.index, rowState.row)) {
+            <div
+              class="grid-row"
+              [class.grid-row-alt]="isAlternateRow(rowState.index)"
+              (contextmenu)="openContextMenu($event, rowState.row)">
+              @for (column of renderedColumns(); track column.id) {
+                <div
+                  class="grid-cell"
+                  [class.grid-cell-editable]="isEditable(column)"
+                  [style.width]="columnWidth(column)"
+                  [style.minWidth]="columnMinWidth(column)"
+                  [style.maxWidth]="columnMaxWidth(column)"
+                  [style.flex]="columnFlex(column)"
+                  (dblclick)="startInlineEdit(rowState.row, column)">
+                  @if (isEditingCell(rowState.row, column.id)) {
+                    <input
+                      type="{{ editorType(column) }}"
+                      class="cell-editor"
+                      [ngModel]="editDraftValue(rowState.row, column.id)"
+                      autofocus
+                      (ngModelChange)="updateEditDraft($event)"
+                      (blur)="commitInlineEdit(rowState.row, column)"
+                      (click)="$event.stopPropagation()"
+                      (keydown.enter)="commitInlineEdit(rowState.row, column)"
+                      (keydown.escape)="cancelInlineEdit()">
                   } @else {
-                    {{ renderCell(row, column) }}
+                    @if (column.cellTemplate) {
+                      <ng-container
+                        [ngTemplateOutlet]="column.cellTemplate"
+                        [ngTemplateOutletContext]="cellTemplateContext(rowState.row, column)">
+                      </ng-container>
+                    } @else {
+                      {{ renderCell(rowState.row, column) }}
+                    }
                   }
-                }
-              </div>
-            }
-          </div>
-        }
+                </div>
+              }
+            </div>
+          }
+        </div>
 
         @if (loading()) {
           <div class="grid-status">Loading rows…</div>

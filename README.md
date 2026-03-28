@@ -78,6 +78,7 @@ export class UsersComponent {
 - sortable headers
 - header filters
 - infinite scroll
+- virtualized row rendering
 - server-side paging/filtering/sorting hooks
 - column show/hide
 - drag-and-drop column reorder

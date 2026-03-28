@@ -55,6 +55,11 @@ interface ColumnResizeState {
   maxWidthPx: number;
 }
 
+interface VirtualRowState {
+  index: number;
+  row: unknown;
+}
+
 @Component({
   selector: 'app-ui-grid',
   standalone: true,
@@ -108,6 +113,24 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
     const orderedColumns = this.orderColumns(this.internalColumns(), this.previewColumnOrder());
     return orderedColumns.filter((column) => column.visible ?? true);
   });
+  protected readonly virtualScrollTop = signal(0);
+  protected readonly virtualViewportHeight = signal(0);
+  protected readonly rowHeightPx = signal(63);
+  protected readonly virtualRows = computed<VirtualRowState[]>(() => {
+    const rows = this.displayedRows();
+    const startIndex = this.virtualStartIndex();
+    const endIndex = this.virtualEndIndex();
+    return rows.slice(startIndex, endIndex).map((row, offset) => ({
+      index: startIndex + offset,
+      row,
+    }));
+  });
+  protected readonly virtualPaddingTop = computed(() =>
+    this.virtualStartIndex() * this.rowHeightPx(),
+  );
+  protected readonly virtualPaddingBottom = computed(() =>
+    Math.max(0, (this.displayedRows().length - this.virtualEndIndex()) * this.rowHeightPx()),
+  );
 
   protected readonly defaultTrackBy = (index: number, row: unknown): unknown =>
     this.trackBy()?.(index, row) ?? row;
@@ -119,6 +142,7 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   private viewReady = false;
   private dragDroppedInsideGrid = false;
   private resizeState?: ColumnResizeState;
+  private readonly virtualOverscan = 6;
 
   constructor() {
     effect(() => {
@@ -138,6 +162,7 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     this.viewReady = true;
+    this.updateVirtualViewport();
     this.scheduleFillCheck();
   }
 
@@ -227,9 +252,15 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
 
   protected onBodyScroll(event: Event): void {
     const target = event.target as HTMLDivElement;
+    this.updateVirtualViewport(target);
     if (target.scrollTop + target.clientHeight >= target.scrollHeight - 96) {
       this.loadMore();
     }
+  }
+
+  @HostListener('window:resize')
+  protected onWindowResize(): void {
+    this.updateVirtualViewport();
   }
 
   protected toggleMainMenu(event: MouseEvent): void {
@@ -483,6 +514,10 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
     return this.filterState()[columnId] ?? '';
   }
 
+  protected isAlternateRow(index: number): boolean {
+    return index % 2 === 0;
+  }
+
   protected columnWidth(column: GridColumn<unknown>): string | null {
     return column.width ?? null;
   }
@@ -634,6 +669,7 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
     this.editingCell.set(undefined);
     this.totalCount.set(undefined);
     this.nextPage = 0;
+    this.resetViewportPosition();
     this.displayedRows.set([]);
 
     if (this.isServerMode()) {
@@ -969,7 +1005,14 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
 
     this.afterRenderTimer = window.setTimeout(() => {
       const body = this.bodyScroller?.nativeElement;
-      if (!body || this.loading() || !this.hasMore() || !this.infiniteScroll()) {
+      if (!body) {
+        return;
+      }
+
+      this.measureRowHeight(body);
+      this.updateVirtualViewport(body);
+
+      if (this.loading() || !this.hasMore() || !this.infiniteScroll()) {
         return;
       }
 
@@ -977,5 +1020,47 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
         this.loadMore();
       }
     }, 0);
+  }
+
+  private virtualStartIndex(): number {
+    const rowHeight = Math.max(this.rowHeightPx(), 1);
+    const startIndex = Math.floor(this.virtualScrollTop() / rowHeight) - this.virtualOverscan;
+    return Math.max(0, startIndex);
+  }
+
+  private virtualEndIndex(): number {
+    const rowsLength = this.displayedRows().length;
+    const rowHeight = Math.max(this.rowHeightPx(), 1);
+    const viewportHeight = Math.max(this.virtualViewportHeight(), rowHeight);
+    const visibleCount = Math.ceil(viewportHeight / rowHeight) + (this.virtualOverscan * 2);
+    return Math.min(rowsLength, this.virtualStartIndex() + visibleCount);
+  }
+
+  private updateVirtualViewport(body = this.bodyScroller?.nativeElement): void {
+    if (!body) {
+      return;
+    }
+
+    this.virtualScrollTop.set(body.scrollTop);
+    this.virtualViewportHeight.set(body.clientHeight);
+  }
+
+  private resetViewportPosition(): void {
+    const body = this.bodyScroller?.nativeElement;
+    if (body) {
+      body.scrollTop = 0;
+      this.updateVirtualViewport(body);
+      return;
+    }
+
+    this.virtualScrollTop.set(0);
+  }
+
+  private measureRowHeight(body: HTMLDivElement): void {
+    const firstRow = body.querySelector<HTMLElement>('.grid-row');
+    const rowHeight = firstRow?.getBoundingClientRect().height ?? 0;
+    if (rowHeight > 0 && Math.abs(rowHeight - this.rowHeightPx()) > 1) {
+      this.rowHeightPx.set(rowHeight);
+    }
   }
 }
